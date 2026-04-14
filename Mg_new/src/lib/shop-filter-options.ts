@@ -33,38 +33,53 @@ function uniqFromArrays(arrays: string[][]): string[] {
 }
 
 export async function getShopFilterOptions(): Promise<ShopFilterOptions> {
-  const [products, agg] = await Promise.all([
-    prisma.product.findMany({
-      select: {
-        category: true,
-        occasion: true,
-        style: true,
-        material: true,
-        colors: true,
-        sizes: true
-      }
-    }),
-    prisma.product.aggregate({
-      _min: { mrp: true },
-      _max: { mrp: true }
-    })
-  ]);
+  try {
+    const [products, agg] = await Promise.all([
+      prisma.product.findMany({
+        select: {
+          category: true,
+          occasion: true,
+          style: true,
+          material: true,
+          colors: true,
+          sizes: true
+        }
+      }),
+      prisma.product.aggregate({
+        _min: { mrp: true },
+        _max: { mrp: true }
+      })
+    ]);
 
-  let priceMin = Math.floor(agg._min.mrp ?? 0);
-  let priceMax = Math.ceil(agg._max.mrp ?? 100_000);
-  if (!Number.isFinite(priceMin)) priceMin = 0;
-  if (!Number.isFinite(priceMax) || priceMax <= priceMin) priceMax = Math.max(priceMin + 1000, 100_000);
+    let priceMin = Math.floor(agg._min.mrp ?? 0);
+    let priceMax = Math.ceil(agg._max.mrp ?? 100_000);
+    if (!Number.isFinite(priceMin)) priceMin = 0;
+    if (!Number.isFinite(priceMax) || priceMax <= priceMin) priceMax = Math.max(priceMin + 1000, 100_000);
 
-  return {
-    categories: uniqSorted(products.map((p) => p.category)),
-    occasions: uniqSorted(products.map((p) => p.occasion)),
-    styles: uniqSorted(products.map((p) => p.style)),
-    materials: uniqSorted(products.map((p) => p.material)),
-    colors: uniqFromArrays(products.map((p) => p.colors)),
-    sizes: uniqFromArrays(products.map((p) => p.sizes)),
-    priceMin,
-    priceMax
-  };
+    return {
+      categories: uniqSorted(products.map((p) => p.category)),
+      occasions: uniqSorted(products.map((p) => p.occasion)),
+      styles: uniqSorted(products.map((p) => p.style)),
+      materials: uniqSorted(products.map((p) => p.material)),
+      colors: uniqFromArrays(products.map((p) => p.colors)),
+      sizes: uniqFromArrays(products.map((p) => p.sizes)),
+      priceMin,
+      priceMax
+    };
+  } catch (error) {
+    console.error("[getShopFilterOptions] Database unreachable:", error);
+    // Return empty filter options to allow shop to render
+    return {
+      categories: [],
+      occasions: [],
+      styles: [],
+      materials: [],
+      colors: [],
+      sizes: [],
+      priceMin: 0,
+      priceMax: 100_000
+    };
+  }
 }
 
 export const PRICE_BUCKETS = [

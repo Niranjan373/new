@@ -7,6 +7,7 @@ import { getProductTotalStock } from "@/lib/variant-stock";
 import { ShopFilters } from "@/components/shop/ShopFilters";
 import { ShopViewToggle } from "@/components/shop/ShopViewToggle";
 import { ProductCard } from "@/components/features/ProductCard";
+import type { Product } from "@prisma/client";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -34,24 +35,38 @@ export default async function ShopPage({ searchParams }: PageProps) {
     session.user.role !== "SUB_ADMIN" &&
     session.user.role !== "TECH_SUPPORT"
   ) {
-    const u = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { wishlist: { select: { id: true } } }
-    });
-    wishlistIds = new Set(u?.wishlist.map((w) => w.id) ?? []);
+    try {
+      const u = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { wishlist: { select: { id: true } } }
+      });
+      wishlistIds = new Set(u?.wishlist.map((w) => w.id) ?? []);
+    } catch (error) {
+      console.error("[ShopPage] Failed to fetch wishlist:", error);
+      // Continue without wishlist data
+    }
   }
 
-  const [filterOptions, products] = await Promise.all([
-    getShopFilterOptions(),
-    prisma.product.findMany({
-      where,
-      orderBy,
-      include: {
-        variants: { select: { quantity: true } },
-        reviews: { select: { rating: true } }
-      }
-    })
-  ]);
+  let filterOptions = { colors: [], sizes: [], prices: { min: 0, max: 1000 } };
+  let products: any[] = [];
+
+  try {
+    [filterOptions, products] = await Promise.all([
+      getShopFilterOptions(),
+      prisma.product.findMany({
+        where,
+        orderBy,
+        include: {
+          variants: { select: { quantity: true } },
+          reviews: { select: { rating: true } }
+        }
+      })
+    ]);
+  } catch (error) {
+    console.error("[ShopPage] Database unreachable:", error);
+    // Allow shop page to render with empty products
+    products = [];
+  }
 
   return (
     <main className="min-h-screen w-full max-w-[100vw] overflow-x-hidden text-zinc-900">
